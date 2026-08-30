@@ -1,10 +1,36 @@
 services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: ledger
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+
   ledger:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://ledger:ledger@postgres:5432/ledger
+      JWT_SECRET: change-me-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./cobol:/app/cobol
       - ./python:/app/python
+      - ./config:/app/config
       - ./work:/app/work
       - ./pytest.ini:/app/pytest.ini
+
+volumes:
+  pgdata:

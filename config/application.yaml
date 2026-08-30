@@ -1,0 +1,22 @@
+interest:
+  # Account master still holds each product rate (ACCT-RATE).
+  # COBOL and the Python oracle both use this divisor — not a hardcoded 5%.
+  monthsInYear: 12
+
+batch:
+  currency: USD
+  statementGeneration: true
+
+database:
+  url: sqlite:///./state/ledger.db
+
+auth:
+  jwtSecret: change-me-in-production-use-32chars-min
+  accessMinutes: 120
+  users:
+    - username: admin
+      password: admin
+      role: ADMIN
+    - username: operator
+      password: operator
+      role: OPERATOR

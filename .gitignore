@@ -1,4 +1,5 @@
 *.egg-info/
+state/
 .venv/
 venv/
 __pycache__/

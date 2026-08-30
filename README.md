@@ -1,129 +1,179 @@
-# Andean Ledger
+# Legacy Banking Modernization Lab
 
-COBOL core-banking **batch** (posting, interest, statements) orchestrated by **Python**: job runner, copybook-to-JSON conversion, regression oracle, REST API, and CI.
+COBOL + Python + FastAPI + PostgreSQL + Docker
 
-This is the kind of work banks hire for when they say *mainframe modernization* — keep the COBOL business rules, wrap them with tests and APIs instead of rewriting everything.
+[![CI](https://github.com/steph4nia97/cobol-python-core-banking/actions/workflows/ci.yml/badge.svg)](https://github.com/steph4nia97/cobol-python-core-banking/actions/workflows/ci.yml)
 
-```text
-accounts.in.dat + transactions.dat
-        │
-        ▼
-   POSTTXN.cbl  →  posted master + exceptions
-        │
-   CALCINT.cbl  →  final master + interest
-        │
-   GENSTMT.cbl  →  statement extract
-        │
-   Python convert / FastAPI / pytest oracle
-```
+**Build | Tests | Docker | Python | COBOL**
 
-## What the COBOL jobs do
+GnuCOBOL end-of-day batch (posting, interest, statements, reconciliation) orchestrated by Python, persisted in PostgreSQL, and exposed through a JWT-protected FastAPI dashboard.
 
-| Job | Program | Input | Output |
-| --- | --- | --- | --- |
-| Post transactions | `POSTTXN` | account master, transactions | posted master, rejects |
-| Accrue interest | `CALCINT` | posted master | final master, interest applied |
-| Statements | `GENSTMT` | final master, interest | statement extract |
+Lab logins (never use these patterns in production): `admin` / `admin` (run batch), `operator` / `operator` (read only).
 
-Business rules in the batch:
+## About
 
-- Credits and debits against an in-memory account table (classic COBOL `OCCURS`)
-- Rejects: unknown account (`NFND`), closed (`CLSD`), NSF (`NSF`), bad type (`ITYP`), bad amount (`IAMT`)
-- Monthly interest on **active savings** only: `balance * annual_rate / 12`, rounded to cents
-- Fixed-width records defined in **copybooks** (`SIGN IS LEADING SEPARATE`)
-
-## What Python does
-
-- Compiles GnuCOBOL (`cobc`) and runs the three programs in order
-- Parses copybooks and turns `.dat` files into JSON
-- A **Python oracle** implements the same rules so tests can prove COBOL output matches
-- FastAPI dashboard + JSON API (`/api/accounts`, `/api/exceptions`, `/api/statements`, `POST /api/run`)
-
-## CV bullet
-
-> Built a COBOL (GnuCOBOL) core-banking batch for transaction posting, interest accrual and statement extract, with Python job orchestration, copybook-to-JSON conversion, a dual-implementation regression oracle, FastAPI, and GitHub Actions CI.
-
-Spanish:
-
-> Batch bancario en COBOL (GnuCOBOL): posting de transacciones, interés y extractos; orquestación Python, conversión copybook→JSON, oracle de regresión, API REST y CI.
-
-## Project layout
+This repo keeps **fixed-width files as the legacy contract** and adds a modernization layer around them: job orchestration, copybook-to-JSON, a Python oracle, PostgreSQL, REST, and CI.
 
 ```text
-cobol/copybooks/     record layouts (ACCT, TXN, EXC, INT, STMT)
-cobol/src/           POSTTXN, CALCINT, GENSTMT
-cobol/data/          generated fixed-width sample files
-python/banking_pipeline/  compile, jobs, copybook parser, oracle, API
-python/tests/        copybook, oracle, and COBOL-vs-oracle tests
-.github/workflows/ci.yml
+transactions.dat
+       ↓
+     COBOL
+       ↓
+Resultado batch
+       ↓
+    Python
+       ↓
+ PostgreSQL
+       ↓
+   FastAPI
+       ↓
+ Dashboard
 ```
 
-## Prerequisites
+## Architecture
 
-- Python 3.11+
-- [GnuCOBOL](https://gnucobol.sourceforge.io/) (`cobc` on your PATH)
-
-Windows: install a GnuCOBOL build so `cobc -V` works (or use WSL). Ubuntu/CI: `sudo apt-get install gnucobol`.
-
-## Run
-
-From the repo root (works even if Python Scripts is not on PATH):
-
-```bash
-pip install -e "./python[dev]"
-python -m banking_pipeline all
-python -m pytest -v
+```text
+             ┌──────────────┐
+             │   Dashboard  │
+             └──────┬───────┘
+                    │
+                REST API (JWT)
+                    │
+             ┌──────▼───────┐
+             │   FastAPI    │
+             └──────┬───────┘
+                    │
+          Python Orchestrator
+                    │
+       ┌────────────┼────────────┬──────────┐
+       ▼            ▼            ▼          ▼
+    POSTTXN       CALCINT      GENSTMT    CTLRPT
+     COBOL         COBOL        COBOL      COBOL
+       │            │            │          │
+       └────────────┼────────────┴──────────┘
+                    ▼
+              Fixed-width files
+                    │
+                    ▼
+              PostgreSQL
 ```
 
-API and dashboard:
+Rates are **not** hardcoded as `0.05` in COBOL. Each account carries `ACCT-RATE`; `config/application.yaml` holds `interest.monthsInYear` (12) used by the Python oracle.
 
-```bash
-python -m uvicorn banking_pipeline.api:app --app-dir python --reload --port 8000
+## Business problem
+
+A bank still posts the day in batch: a master file plus a transaction file. Rejects must not change balances. Savings interest is monthly. The operator needs a proof that opening + credits − debits + interest = closing.
+
+## Batch processing
+
+| Job | Program | Role |
+| --- | --- | --- |
+| Post | `POSTTXN` | Credits/debits, journal, rejects (`NFND` `CLSD` `NSF` `ITYP` `IAMT` `DUP`) |
+| Interest | `CALCINT` | Active savings only: `balance × rate / monthsInYear` |
+| Statements | `GENSTMT` | Statement extract |
+| Proof | `CTLRPT` | Reconciliation; **RETURN-CODE 8** if out of balance |
+
+Python runs them in order. A non-zero COBOL exit **stops the stream** (CALCINT does not run if POSTTXN fails) and stores:
+
+```json
+{ "step": "POSTTXN", "status": "FAILED", "exitCode": 8 }
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). “Run COBOL batch” compiles and executes the job stream. OpenAPI is at `/docs`.
+Idempotency: each movement has `TXN-YYYYMMDD-NNNNNN`. A second **Run end-of-day** with the same ids is `ALREADY PROCESSED` (`DUP`).
 
-Windows helper: `.\run.ps1 all`, `.\run.ps1 test`, `.\run.ps1 api`.
+Logs record batch id, step, and exception **codes** — not amounts or personal data.
 
-### Docker (no local GnuCOBOL)
+## COBOL programs
+
+- `cobol/src/POSTTXN.cbl` — posting + journal + duplicate check against `processed.dat`
+- `cobol/src/CALCINT.cbl` — interest from the account master rate
+- `cobol/src/GENSTMT.cbl` — statements
+- `cobol/src/CTLRPT.cbl` — daily proof / **RECONCILED** control record
+
+## API
+
+Swagger: `/docs`
+
+| Method | Path | Role |
+| --- | --- | --- |
+| POST | `/api/auth/login` | public |
+| GET | `/api/accounts` | OPERATOR, ADMIN |
+| GET | `/api/accounts/{id}` | OPERATOR, ADMIN |
+| GET | `/api/transactions` | OPERATOR, ADMIN |
+| GET | `/api/transactions/rejected` | OPERATOR, ADMIN |
+| GET | `/api/batches` | OPERATOR, ADMIN |
+| GET | `/api/batches/{id}` | OPERATOR, ADMIN |
+| GET | `/api/statements/{account}` | OPERATOR, ADMIN |
+| POST | `/api/batch/run` | **ADMIN** |
+
+## Testing
+
+Three layers:
+
+1. **Unit** — copybooks, rates, reject codes, duplicate ids, reconciliation math  
+2. **Integration** — FastAPI auth (operator cannot run the batch)  
+3. **E2E** — GnuCOBOL output vs Python oracle when `cobc` is installed  
+
+`pytest -v --cov=banking_pipeline`  
+
+Interest check (do not mix Maria’s 5.00% with Lucia’s $100,000):
+
+- `$100,000 × 5.00% / 12 = $416.67` (not Lucia)
+- `$100,000 × 4.25% / 12 = $354.17` → **100,354.17**
+- `$15,300 × 5.00% / 12 = $63.75` → **15,363.75**
+
+## Running with Docker
 
 ```bash
 docker compose up --build
 ```
 
-Then open [http://127.0.0.1:8000](http://127.0.0.1:8000) and click **Run COBOL batch**. The image already has `cobc`.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000), sign in as **admin**, click **Run end-of-day**.
 
-Useful commands:
+Without Docker: Python 3.11+, GnuCOBOL, then:
 
 ```bash
-python -m banking_pipeline seed       # write cobol/data/*.dat
-python -m banking_pipeline compile    # cobc -x the three programs into bin/
-python -m banking_pipeline run        # compile + run + JSON in work/json/
+pip install -e "./python[dev]"
+python -m pytest -v --cov=banking_pipeline
+python -m uvicorn banking_pipeline.api:app --app-dir python --port 8000
 ```
 
-## Sample results (oracle)
+SQLite is the default in `config/application.yaml`. Docker Compose uses **PostgreSQL**.
 
-Interest is `posted_balance × that account's annual rate / 12`, not one rate for the whole bank.
+## Project structure
 
-The easy check that is **not** Lucia:
+```text
+cobol/copybooks/     ACCT TXN EXC JRN INT STMT CTL
+cobol/src/           POSTTXN CALCINT GENSTMT CTLRPT
+config/application.yaml
+python/banking_pipeline/
+python/tests/
+.github/workflows/ci.yml
+```
 
-- `$100,000.00 × 5.00% / 12 = $416.67`
+PostgreSQL tables: `accounts`, `transactions`, `batch_runs`, `rejected_transactions`, `statements`, `audit_logs`.
 
-Lucia’s savings rate in the seed file is **4.25%**. Maria is the 5.00% account, and her balance after posting is $15,300, not $100,000.
+## Architecture decisions
+
+- Legacy files stay the COBOL I/O; SQL is the system of record after each successful batch.  
+- Fatal COBOL errors use RETURN-CODE 8 so the orchestrator can halt.  
+- JWT roles separate **operator** (read) from **admin** (run).  
+- Logs never include balances or transaction amounts.
+
+## Sample results
 
 | Account | Rate | After posting | Interest | Final |
 | --- | ---: | ---: | ---: | ---: |
-| 1000000001 Maria Gonzalez (savings) | 5.00% | 15,300.00 | 63.75 | 15,363.75 |
-| 1000000002 Carlos Ramirez (checking) | 0% | 2,000.00 | 0.00 | 2,000.00 |
-| 1000000003 Sofia Herrera (NSF then credit) | 0% | 175.00 | 0.00 | 175.00 |
-| 1000000004 Pedro Alvarez (closed savings) | 3.00% | 800.00 | 0.00 | 800.00 |
-| 1000000005 Lucia Fernandez (savings, no txns) | 4.25% | 100,000.00 | 354.17 | 100,354.17 |
+| Maria Gonzalez | 5.00% | 15,300.00 | 63.75 | 15,363.75 |
+| Carlos Ramirez | 0% | 2,000.00 | 0.00 | 2,000.00 |
+| Sofia Herrera | 0% | 175.00 | 0.00 | 175.00 |
+| Pedro Alvarez (closed) | 3.00% | 800.00 | 0.00 | 800.00 |
+| Lucia Fernandez | 4.25% | 100,000.00 | 354.17 | 100,354.17 |
 
-Worked interest:
+Daily proof: opening 118,400.00 + credits 575.00 − debits 700.00 + interest 417.92 = **118,692.92 RECONCILED**.
 
-- Maria: `$15,300.00 × 5.00% / 12 = $63.75` → 15,363.75
-- Lucia: `$100,000.00 × 4.25% / 12 = $354.17` → 100,354.17
+## Future improvements
 
-`test_interest_uses_each_accounts_rate_not_a_global_five_percent` and `test_readme_documents_rates_and_does_not_imply_lucia_is_five_percent` lock this down. If GnuCOBOL is installed, `test_cobol_matches_oracle_when_compiled` also checks COBOL output against the same oracle.
-
-Five exceptions: NSF, closed, unknown account, invalid type, zero amount.
+- Restart from the failed step only  
+- Statement PDF export  
+- Hash-based passwords instead of lab YAML users  

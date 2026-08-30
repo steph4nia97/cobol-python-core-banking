@@ -2,7 +2,6 @@
 
 from decimal import Decimal
 
-# Mental-math trap: 5% of 100_000 is not Lucia's coupon.
 FIVE_PERCENT_ON_100K = Decimal("416.67")
 
 MARIA_ID = "1000000001"
@@ -17,6 +16,12 @@ LUCIA_POSTED = Decimal("100000.00")
 LUCIA_INTEREST = Decimal("354.17")
 LUCIA_FINAL = Decimal("100354.17")
 
+OPENING_TOTAL = Decimal("118400.00")
+CREDIT_TOTAL = Decimal("575.00")
+DEBIT_TOTAL = Decimal("700.00")
+INTEREST_TOTAL = Decimal("417.92")
+CLOSING_TOTAL = Decimal("118692.92")
+
 README_MARKERS = (
     "5.00%",
     "4.25%",
@@ -24,4 +29,6 @@ README_MARKERS = (
     "354.17",
     "15,363.75",
     "100,354.17",
+    "PostgreSQL",
+    "RECONCILED",
 )

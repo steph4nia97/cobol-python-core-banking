@@ -8,6 +8,7 @@ WORKDIR /app
 COPY pytest.ini /app/pytest.ini
 COPY python /app/python
 COPY cobol /app/cobol
+COPY config /app/config
 
 RUN pip install --no-cache-dir -e "./python[dev]"
 

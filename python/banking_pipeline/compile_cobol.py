@@ -9,7 +9,7 @@ from pathlib import Path
 
 from banking_pipeline.paths import bin_dir, cobol_src, copybook_dir
 
-PROGRAMS = ("POSTTXN", "CALCINT", "GENSTMT")
+PROGRAMS = ("POSTTXN", "CALCINT", "GENSTMT", "CTLRPT")
 
 
 class CobolNotInstalledError(RuntimeError):

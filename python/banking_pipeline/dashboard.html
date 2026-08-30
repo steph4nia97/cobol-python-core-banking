@@ -3,147 +3,178 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Andean Ledger — COBOL batch</title>
+  <title>Banking Batch Control</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --panel: #17202a;
-      --line: #2c3a4d;
-      --text: #e8eef4;
-      --muted: #9bb0c3;
-      --accent: #3dd6c6;
-      --warn: #f0b429;
-      --bad: #ef6b6b;
+      --bg: #0c1117; --panel: #151c25; --line: #2a3646; --text: #e9eef4;
+      --muted: #8ea0b3; --accent: #3dd6c6; --bad: #ef6b6b; --ok: #5ee4a8;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-    header, main { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
+    body { margin: 0; font-family: "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    header, main, #login { max-width: 1100px; margin: 0 auto; padding: 1.2rem; }
     header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-    h1 { margin: 0; font-size: 1.4rem; }
+    h1 { margin: 0; font-size: 1.25rem; letter-spacing: .04em; }
     h1 span { color: var(--accent); }
-    p.lead { color: var(--muted); margin: 0.35rem 0 0; }
-    button {
-      background: var(--accent);
-      color: #06221f;
-      border: 0;
-      border-radius: 6px;
-      padding: 0.6rem 1rem;
-      font-weight: 700;
-      cursor: pointer;
+    .muted { color: var(--muted); }
+    button, input {
+      border-radius: 6px; padding: 0.55rem 0.9rem; border: 1px solid var(--line);
+      font: inherit;
     }
-    button:disabled { opacity: 0.6; cursor: wait; }
+    button { background: var(--accent); color: #06221f; font-weight: 700; cursor: pointer; border: 0; }
+    button:disabled { opacity: .6; }
+    input { background: var(--panel); color: var(--text); width: 100%; }
     .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin: 1rem 0; }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 1rem;
-    }
-    .card strong { display: block; font-size: 1.6rem; color: var(--accent); }
-    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-    th, td { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--line); }
-    th { color: var(--muted); font-weight: 600; }
-    .tag { padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.75rem; }
-    .ok { background: #1e4d46; color: var(--accent); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; }
+    .card strong { display: block; font-size: 1.5rem; color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.45rem; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); }
+    tr.acct { cursor: pointer; }
+    tr.acct:hover { background: #1d2733; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    .tag { padding: .1rem .4rem; border-radius: 999px; font-size: .75rem; background: #1e4d46; color: var(--accent); }
     .closed { background: #4d2a2a; color: var(--bad); }
-    .code { color: var(--warn); font-family: Consolas, monospace; }
-    .status { color: var(--muted); min-height: 1.2rem; }
-    @media (max-width: 800px) {
-      header { flex-direction: column; align-items: flex-start; }
-      .cards { grid-template-columns: 1fr; }
-    }
+    #login .card { max-width: 360px; margin: 4rem auto; }
+    label { display: block; margin: .6rem 0 .25rem; color: var(--muted); font-size: .85rem; }
+    @media (max-width: 800px) { .cards { grid-template-columns: 1fr; } header { flex-direction: column; align-items: flex-start; } }
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>Andean <span>Ledger</span></h1>
-      <p class="lead">COBOL posting / interest / statements · Python orchestration</p>
+  <section id="login">
+    <div class="card">
+      <h1>Banking <span>Batch Control</span></h1>
+      <p class="muted">Lab logins — admin/admin (run), operator/operator (read).</p>
+      <label>User</label>
+      <input id="user" value="admin">
+      <label>Password</label>
+      <input id="pass" type="password" value="admin">
+      <p class="muted" id="login-err"></p>
+      <button id="signin" style="margin-top:1rem;width:100%">Sign in</button>
     </div>
-    <button id="run">Run COBOL batch</button>
-  </header>
-  <main>
-    <p class="status" id="status">Load the last batch, or run a new one.</p>
-    <section class="cards">
-      <div class="card"><span>Accounts</span><strong id="n-accounts">0</strong></div>
-      <div class="card"><span>Exceptions</span><strong id="n-exceptions">0</strong></div>
-      <div class="card"><span>Statements</span><strong id="n-statements">0</strong></div>
-    </section>
-    <section class="card">
-      <h2>Account master (after interest)</h2>
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Name</th><th>Type</th><th>Status</th><th>Rate</th><th>Balance</th></tr>
-        </thead>
-        <tbody id="accounts"></tbody>
-      </table>
-    </section>
-    <section class="card" style="margin-top:1rem">
-      <h2>Exceptions</h2>
-      <table>
-        <thead>
-          <tr><th>Account</th><th>Code</th><th>Message</th><th>Amount</th></tr>
-        </thead>
-        <tbody id="exceptions"></tbody>
-      </table>
-    </section>
-  </main>
+  </section>
+  <div id="app" hidden>
+    <header>
+      <div>
+        <h1>Banking <span>Batch Control</span></h1>
+        <p class="muted" id="who"></p>
+      </div>
+      <button id="run">Run end-of-day</button>
+    </header>
+    <main>
+      <p class="muted" id="status">Sign in, then run the COBOL stream.</p>
+      <section class="cards">
+        <div class="card"><span>Last batch</span><strong id="last-status">—</strong><span class="muted" id="last-id"></span></div>
+        <div class="card"><span>Approved / rejected</span><strong id="n-post">0 / 0</strong></div>
+        <div class="card"><span>Reconciliation</span><strong id="recon">—</strong></div>
+      </section>
+      <section class="card">
+        <h2>Account master</h2>
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Status</th><th>Rate</th><th>Balance</th></tr></thead>
+          <tbody id="accounts"></tbody>
+        </table>
+      </section>
+      <section class="card" style="margin-top:1rem" id="activity-card" hidden>
+        <h2 id="activity-title">Statement detail</h2>
+        <table>
+          <thead><tr><th>Txn</th><th>Date</th><th>Type</th><th>Amount</th><th>After</th></tr></thead>
+          <tbody id="activity"></tbody>
+        </table>
+      </section>
+      <section class="card" style="margin-top:1rem">
+        <h2>Rejected transactions</h2>
+        <table>
+          <thead><tr><th>Txn</th><th>Account</th><th>Code</th><th>Message</th></tr></thead>
+          <tbody id="rejected"></tbody>
+        </table>
+      </section>
+      <section class="card" style="margin-top:1rem">
+        <h2>Recent batch runs</h2>
+        <table>
+          <thead><tr><th>Batch</th><th>Status</th><th>Step</th><th>ms</th></tr></thead>
+          <tbody id="batches"></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
   <script>
     const money = (v) => Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
     const pct = (v) => (Number(v) * 100).toFixed(2) + "%";
+    let token = "";
+    let role = "";
 
-    async function loadAll() {
-      const [accounts, exceptions, statements] = await Promise.all([
-        fetch("/api/accounts").then(r => r.json()),
-        fetch("/api/exceptions").then(r => r.json()),
-        fetch("/api/statements").then(r => r.json()),
-      ]);
-      document.getElementById("n-accounts").textContent = accounts.length;
-      document.getElementById("n-exceptions").textContent = exceptions.length;
-      document.getElementById("n-statements").textContent = statements.length;
-      document.getElementById("accounts").innerHTML = accounts.map(a => `
-        <tr>
-          <td>${a.acct_id}</td>
-          <td>${a.acct_name}</td>
-          <td>${a.acct_type === "S" ? "Savings" : "Checking"}</td>
-          <td><span class="tag ${a.acct_status === "A" ? "ok" : "closed"}">${a.acct_status === "A" ? "Active" : "Closed"}</span></td>
-          <td>${pct(a.acct_rate)}</td>
-          <td>${money(a.acct_balance)}</td>
-        </tr>
-      `).join("");
-      document.getElementById("exceptions").innerHTML = exceptions.map(e => `
-        <tr>
-          <td>${e.exc_acct_id}</td>
-          <td class="code">${e.exc_code}</td>
-          <td>${e.exc_message}</td>
-          <td>${money(e.exc_amount)}</td>
-        </tr>
-      `).join("");
-    }
+    const authHeaders = () => ({ Authorization: "Bearer " + token });
 
-    document.getElementById("run").addEventListener("click", async () => {
-      const button = document.getElementById("run");
-      const status = document.getElementById("status");
-      button.disabled = true;
-      status.textContent = "Compiling and running POSTTXN → CALCINT → GENSTMT…";
-      const response = await fetch("/api/run", { method: "POST" });
+    async function signIn() {
+      const response = await fetch("/api/auth/login-json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: document.getElementById("user").value, password: document.getElementById("pass").value }),
+      });
       const body = await response.json();
       if (!response.ok) {
-        status.textContent = body.detail || "Batch failed";
-      } else {
-        status.textContent = "Batch complete. Work directory: " + body.work_dir;
-        await loadAll();
+        document.getElementById("login-err").textContent = body.detail || "Login failed";
+        return;
       }
-      button.disabled = false;
-    });
+      token = body.access_token;
+      role = body.role;
+      document.getElementById("login").hidden = true;
+      document.getElementById("app").hidden = false;
+      document.getElementById("who").textContent = body.username + " · " + body.role;
+      document.getElementById("run").disabled = role !== "ADMIN";
+      await loadAll();
+    }
 
-    loadAll().catch(() => {
-      document.getElementById("status").textContent = "No batch output yet. Click Run COBOL batch.";
+    async function loadAll() {
+      const [accounts, rejected, batches, control] = await Promise.all([
+        fetch("/api/accounts", { headers: authHeaders() }).then(r => r.json()),
+        fetch("/api/transactions/rejected", { headers: authHeaders() }).then(r => r.json()),
+        fetch("/api/batches", { headers: authHeaders() }).then(r => r.json()),
+        fetch("/api/control", { headers: authHeaders() }).then(r => r.json()),
+      ]);
+      const last = batches[0];
+      document.getElementById("last-status").textContent = last ? last.status : "NONE";
+      document.getElementById("last-status").className = last && last.status === "SUCCESS" ? "ok" : "";
+      document.getElementById("last-id").textContent = last ? last.batch_id : "";
+      document.getElementById("n-post").textContent = (last ? last.accepted : 0) + " / " + (last ? last.rejected : 0);
+      const recon = (control.ctl_status || last?.recon_status || "—").toString().trim();
+      document.getElementById("recon").textContent = recon.startsWith("BAL") || recon === "RECONCILED" ? "RECONCILED" : recon;
+      document.getElementById("accounts").innerHTML = accounts.map(a => `
+        <tr class="acct" data-id="${a.acct_id}">
+          <td>${a.acct_id}</td><td>${a.acct_name}</td>
+          <td>${a.acct_type === "S" ? "Savings" : "Checking"}</td>
+          <td><span class="tag ${a.acct_status === "A" ? "" : "closed"}">${a.acct_status === "A" ? "Active" : "Closed"}</span></td>
+          <td>${pct(a.acct_rate)}</td><td>${money(a.acct_balance)}</td>
+        </tr>`).join("");
+      document.querySelectorAll("tr.acct").forEach(row => row.addEventListener("click", () => showActivity(row.dataset.id)));
+      document.getElementById("rejected").innerHTML = rejected.map(e => `
+        <tr><td>${e.txn_id || e.exc_txn_id || ""}</td><td>${e.account_id || e.exc_acct_id}</td>
+        <td>${e.reject_code || e.exc_code}</td><td>${e.description || e.exc_message || ""}</td></tr>`).join("");
+      document.getElementById("batches").innerHTML = batches.map(b => `
+        <tr><td>${b.batch_id}</td><td class="${b.status === "SUCCESS" ? "ok" : "bad"}">${b.status}</td>
+        <td>${b.failed_step || "—"}</td><td>${b.duration_ms}</td></tr>`).join("");
+    }
+
+    async function showActivity(id) {
+      const row = await fetch("/api/accounts/" + id, { headers: authHeaders() }).then(r => r.json());
+      document.getElementById("activity-card").hidden = false;
+      document.getElementById("activity-title").textContent = "Statement detail · " + id;
+      document.getElementById("activity").innerHTML = (row.activity || []).map(j => `
+        <tr><td>${j.jrn_txn_id}</td><td>${j.jrn_date}</td><td>${j.jrn_type}</td>
+        <td>${money(j.jrn_amount)}</td><td>${money(j.jrn_bal_after)}</td></tr>`).join("");
+    }
+
+    document.getElementById("signin").addEventListener("click", signIn);
+    document.getElementById("run").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+      document.getElementById("run").disabled = true;
+      status.textContent = "POSTTXN → CALCINT → GENSTMT → CTLRPT";
+      const response = await fetch("/api/batch/run", { method: "POST", headers: authHeaders() });
+      const body = await response.json();
+      status.textContent = response.ok ? ("SUCCESS " + body.batch_id) : JSON.stringify(body.detail);
+      await loadAll();
+      document.getElementById("run").disabled = role !== "ADMIN";
     });
   </script>
 </body>

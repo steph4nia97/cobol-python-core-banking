@@ -7,6 +7,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ledger
+          POSTGRES_PASSWORD: ledger
+          POSTGRES_DB: ledger
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ledger"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://ledger:ledger@localhost:5432/ledger
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,7 +32,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gnucobol
       - name: Install Python package
         run: pip install -e "./python[dev]"
-      - name: Run tests
-        run: pytest -v
+      - name: Run tests with coverage
+        run: pytest -v --cov=banking_pipeline --cov-report=term-missing
       - name: Run full batch
-        run: banking-pipeline all
+        run: python -m banking_pipeline all

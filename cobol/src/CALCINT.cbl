@@ -45,20 +45,20 @@ PROCEDURE DIVISION.
 MAIN-PROCEDURE.
     OPEN INPUT ACCT-IN-FILE
     IF WS-ACCT-IN-STATUS NOT = "00"
-        DISPLAY "CALCINT: cannot open accounts.posted.dat status="
-            WS-ACCT-IN-STATUS
+        DISPLAY "CALCINT: cannot open accounts.posted.dat"
+        MOVE 8 TO RETURN-CODE
         STOP RUN
     END-IF
     OPEN OUTPUT ACCT-OUT-FILE
     IF WS-ACCT-OUT-STATUS NOT = "00"
-        DISPLAY "CALCINT: cannot open accounts.final.dat status="
-            WS-ACCT-OUT-STATUS
+        DISPLAY "CALCINT: cannot open accounts.final.dat"
+        MOVE 8 TO RETURN-CODE
         STOP RUN
     END-IF
     OPEN OUTPUT INT-OUT-FILE
     IF WS-INT-OUT-STATUS NOT = "00"
-        DISPLAY "CALCINT: cannot open interest.dat status="
-            WS-INT-OUT-STATUS
+        DISPLAY "CALCINT: cannot open interest.dat"
+        MOVE 8 TO RETURN-CODE
         STOP RUN
     END-IF
     PERFORM UNTIL ACCT-EOF

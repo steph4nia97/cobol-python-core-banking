@@ -1,12 +1,14 @@
 >>SOURCE FORMAT FREE
-*> Transaction record (71 bytes)
+*> Transaction record (91 bytes)
 *> Offset  Len  Field
-*>      1   10  TXN-ACCT-ID
-*>     11    8  TXN-DATE       YYYYMMDD
-*>     19    1  TXN-TYPE       C=credit D=debit
-*>     20   12  TXN-AMOUNT     S9(09)V99 leading separate
-*>     32   40  TXN-DESC
+*>      1   20  TXN-ID         TXN-YYYYMMDD-NNNNNN
+*>     21   10  TXN-ACCT-ID
+*>     31    8  TXN-DATE       YYYYMMDD
+*>     39    1  TXN-TYPE       C=credit D=debit
+*>     40   12  TXN-AMOUNT
+*>     52   40  TXN-DESC
 01 TRANSACTION-RECORD.
+    05 TXN-ID               PIC X(20).
     05 TXN-ACCT-ID          PIC X(10).
     05 TXN-DATE             PIC 9(08).
     05 TXN-TYPE             PIC X(01).
