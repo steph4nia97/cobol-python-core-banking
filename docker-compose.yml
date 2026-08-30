@@ -1,0 +1,10 @@
+services:
+  ledger:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./cobol:/app/cobol
+      - ./python:/app/python
+      - ./work:/app/work
+      - ./pytest.ini:/app/pytest.ini

@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: banking-pipeline
+Version: 1.0.0
+Summary: Python orchestration, copybook conversion and API around a COBOL banking batch
+Requires-Python: >=3.11
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.27
+Requires-Dist: pydantic>=2.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: httpx>=0.27; extra == "dev"

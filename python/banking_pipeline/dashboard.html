@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Andean Ledger — COBOL batch</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #17202a;
+      --line: #2c3a4d;
+      --text: #e8eef4;
+      --muted: #9bb0c3;
+      --accent: #3dd6c6;
+      --warn: #f0b429;
+      --bad: #ef6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header, main { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    h1 { margin: 0; font-size: 1.4rem; }
+    h1 span { color: var(--accent); }
+    p.lead { color: var(--muted); margin: 0.35rem 0 0; }
+    button {
+      background: var(--accent);
+      color: #06221f;
+      border: 0;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin: 1rem 0; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+    .card strong { display: block; font-size: 1.6rem; color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; }
+    .tag { padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.75rem; }
+    .ok { background: #1e4d46; color: var(--accent); }
+    .closed { background: #4d2a2a; color: var(--bad); }
+    .code { color: var(--warn); font-family: Consolas, monospace; }
+    .status { color: var(--muted); min-height: 1.2rem; }
+    @media (max-width: 800px) {
+      header { flex-direction: column; align-items: flex-start; }
+      .cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Andean <span>Ledger</span></h1>
+      <p class="lead">COBOL posting / interest / statements · Python orchestration</p>
+    </div>
+    <button id="run">Run COBOL batch</button>
+  </header>
+  <main>
+    <p class="status" id="status">Load the last batch, or run a new one.</p>
+    <section class="cards">
+      <div class="card"><span>Accounts</span><strong id="n-accounts">0</strong></div>
+      <div class="card"><span>Exceptions</span><strong id="n-exceptions">0</strong></div>
+      <div class="card"><span>Statements</span><strong id="n-statements">0</strong></div>
+    </section>
+    <section class="card">
+      <h2>Account master (after interest)</h2>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Name</th><th>Type</th><th>Status</th><th>Rate</th><th>Balance</th></tr>
+        </thead>
+        <tbody id="accounts"></tbody>
+      </table>
+    </section>
+    <section class="card" style="margin-top:1rem">
+      <h2>Exceptions</h2>
+      <table>
+        <thead>
+          <tr><th>Account</th><th>Code</th><th>Message</th><th>Amount</th></tr>
+        </thead>
+        <tbody id="exceptions"></tbody>
+      </table>
+    </section>
+  </main>
+  <script>
+    const money = (v) => Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
+    const pct = (v) => (Number(v) * 100).toFixed(2) + "%";
+
+    async function loadAll() {
+      const [accounts, exceptions, statements] = await Promise.all([
+        fetch("/api/accounts").then(r => r.json()),
+        fetch("/api/exceptions").then(r => r.json()),
+        fetch("/api/statements").then(r => r.json()),
+      ]);
+      document.getElementById("n-accounts").textContent = accounts.length;
+      document.getElementById("n-exceptions").textContent = exceptions.length;
+      document.getElementById("n-statements").textContent = statements.length;
+      document.getElementById("accounts").innerHTML = accounts.map(a => `
+        <tr>
+          <td>${a.acct_id}</td>
+          <td>${a.acct_name}</td>
+          <td>${a.acct_type === "S" ? "Savings" : "Checking"}</td>
+          <td><span class="tag ${a.acct_status === "A" ? "ok" : "closed"}">${a.acct_status === "A" ? "Active" : "Closed"}</span></td>
+          <td>${pct(a.acct_rate)}</td>
+          <td>${money(a.acct_balance)}</td>
+        </tr>
+      `).join("");
+      document.getElementById("exceptions").innerHTML = exceptions.map(e => `
+        <tr>
+          <td>${e.exc_acct_id}</td>
+          <td class="code">${e.exc_code}</td>
+          <td>${e.exc_message}</td>
+          <td>${money(e.exc_amount)}</td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("run").addEventListener("click", async () => {
+      const button = document.getElementById("run");
+      const status = document.getElementById("status");
+      button.disabled = true;
+      status.textContent = "Compiling and running POSTTXN → CALCINT → GENSTMT…";
+      const response = await fetch("/api/run", { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) {
+        status.textContent = body.detail || "Batch failed";
+      } else {
+        status.textContent = "Batch complete. Work directory: " + body.work_dir;
+        await loadAll();
+      }
+      button.disabled = false;
+    });
+
+    loadAll().catch(() => {
+      document.getElementById("status").textContent = "No batch output yet. Click Run COBOL batch.";
+    });
+  </script>
+</body>
+</html>

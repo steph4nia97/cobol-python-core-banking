@@ -1,0 +1,2 @@
+[console_scripts]
+banking-pipeline = banking_pipeline.cli:main
